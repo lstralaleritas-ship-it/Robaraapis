@@ -8,7 +8,12 @@ const PORT = process.env.PORT || 3000;
 const antiSpamMap = new Map();
 
 const CONFIG = {
-    WEBHOOK_URL: process.env.DISCORD_WEBHOOK,
+    // Webhooks separados por categoría
+    WEBHOOKS: {
+        NORMAL: process.env.WEBHOOK_NORMAL,
+        ULTRA: process.env.WEBHOOK_ULTRA,
+        SUPER: process.env.WEBHOOK_SUPER
+    },
     PLACE_ID: "109983668079237",
     THUMBNAIL_URL: "https://cdn.discordapp.com/attachments/1475916194803355673/1488480971056742430/lv_0_20260328165632.png",
     SOURCES: [
@@ -18,7 +23,6 @@ const CONFIG = {
     ],
     RECONNECT_INTERVAL: 5000,
     COOLDOWN_MS: 2000,
-    // Aumentamos a 9 para permitir billones reales, pero bloqueamos si es exagerado
     MAX_DIGITS_BEFORE_DOT: 9, 
     ULTRA_THRESHOLD: 200, 
     SUPER_THRESHOLD: 500,
@@ -26,8 +30,8 @@ const CONFIG = {
     ROLE_SUPER: "<@&1488489581421531278>"
 };
 
-app.get('/', (req, res) => res.send('Sakura Highlights 🌸 Smart Shield Active'));
-app.listen(PORT, () => console.log(`🚀 Sakura API lista y filtrando`));
+app.get('/', (req, res) => res.send('Sakura Highlights 🌸 Multi-Channel Active'));
+app.listen(PORT, () => console.log(`🚀 Sakura Multi-Webhook API lista`));
 
 function formatDynamic(value) {
     let num = parseFloat(value) || 0;
@@ -36,38 +40,42 @@ function formatDynamic(value) {
 }
 
 async function notifyDiscord(logData) {
-    if (!CONFIG.WEBHOOK_URL) return;
-
-    // ESCUDO INTELIGENTE: Solo cuenta dígitos antes del punto decimal
+    const numValue = parseFloat(logData.money) || 0;
     const cleanNumber = logData.money.toString().split('.')[0].replace(/[^0-9]/g, '');
     
-    if (cleanNumber.length > CONFIG.MAX_DIGITS_BEFORE_DOT) {
-        console.log(`⚠️ Log inflado ignorado: ${logData.name} (${cleanNumber})`);
-        return; 
-    }
+    if (cleanNumber.length > CONFIG.MAX_DIGITS_BEFORE_DOT) return; 
 
     const lockKey = `${logData.name}-${logData.jobid}`;
     if (antiSpamMap.has(lockKey)) return;
 
     try {
         antiSpamMap.set(lockKey, true);
-        const numValue = parseFloat(logData.money) || 0;
         const joinLink = `https://www.roblox.com/games/start?placeId=${CONFIG.PLACE_ID}&gameInstanceId=${logData.jobid}`;
         const displayMoney = formatDynamic(logData.money);
         
         let embedTitle = "🌸 Sakura Highlights";
         let embedColor = 16751052; 
         let mention = "";
+        let targetWebhook = CONFIG.WEBHOOKS.NORMAL; // Por defecto al canal normal
 
+        // Lógica de Selección de Canal y Estilo
         if (numValue >= CONFIG.SUPER_THRESHOLD) {
             embedTitle = "🌸 Sakura Highlights | SuperLight";
             embedColor = 16711858; 
             mention = CONFIG.ROLE_SUPER;
+            targetWebhook = CONFIG.WEBHOOKS.SUPER;
         }
         else if (numValue >= CONFIG.ULTRA_THRESHOLD) {
             embedTitle = "🌸 Sakura Highlights | UltraLight";
             embedColor = 16729272; 
             mention = CONFIG.ROLE_ULTRA;
+            targetWebhook = CONFIG.WEBHOOKS.ULTRA;
+        }
+
+        // Si el Webhook específico no está configurado, no enviamos nada
+        if (!targetWebhook) {
+            console.log(`⚠️ Webhook no configurado para el valor: ${numValue}`);
+            return;
         }
 
         const payload = {
@@ -83,7 +91,7 @@ async function notifyDiscord(logData) {
             }]
         };
 
-        await axios.post(CONFIG.WEBHOOK_URL, payload);
+        await axios.post(targetWebhook, payload);
         setTimeout(() => antiSpamMap.delete(lockKey), CONFIG.COOLDOWN_MS);
     } catch (err) {
         antiSpamMap.delete(lockKey);
@@ -92,7 +100,6 @@ async function notifyDiscord(logData) {
 
 function connect(url) {
     const ws = new WebSocket(url);
-    ws.on('open', () => console.log(`✅ Conectado a: ${url}`));
     ws.on('message', (raw) => {
         try {
             const parsed = JSON.parse(raw);
