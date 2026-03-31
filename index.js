@@ -6,14 +6,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const CONFIG = {
-    // Se configura en el panel de Railway como DISCORD_WEBHOOK
+    // Configura DISCORD_WEBHOOK en las variables de Railway
     WEBHOOK_URL: process.env.DISCORD_WEBHOOK,
     PLACE_ID: "109983668079237",
-    // Imagen en la esquina (Thumbnail)
     THUMBNAIL_URL: "https://cdn.discordapp.com/attachments/1475916194803355673/1488480971056742430/lv_0_20260328165632.png?ex=69ccef6e&is=69cb9dee&hm=b3916b927b605ce766d149938fab8e3187956fb8d68707ba29ea9e4d7a07f148&",
     SOURCES: [
         "wss://worker2.goalforest.workers.dev/ws",
-        "wss://jw-auto-joiner-production-bda0.up.railway.app/"
+        "wss://jw-auto-joiner-production-bda0.up.railway.app/",
+        "wss://finders-port-websocket-production.up.railway.app/ws"
     ],
     RECONNECT_INTERVAL: 5000
 };
@@ -30,9 +30,8 @@ async function notifyDiscord(logData) {
             username: "Sakura Highlights",
             embeds: [{
                 title: "🌸 Sakura Highlights",
-                // Se quitó "Best" y se añadió ## al nombre
                 description: `## ${logData.name}\n\`[${logData.generation}]\`\n\n**🔗 [¡Unete al servidor!](${joinLink})**`,
-                color: 16751052, // Rosa Sakura
+                color: 16751052,
                 thumbnail: {
                     url: CONFIG.THUMBNAIL_URL
                 },
@@ -44,7 +43,7 @@ async function notifyDiscord(logData) {
         await axios.post(CONFIG.WEBHOOK_URL, payload);
         console.log(`🌸 Sakura Log: ${logData.name}`);
     } catch (err) {
-        console.error("❌ Error en el Webhook");
+        console.error("❌ Error en el Webhook de Discord");
     }
 }
 
@@ -56,12 +55,21 @@ function connect(url) {
     ws.on('message', (raw) => {
         try {
             const parsed = JSON.parse(raw);
-            // Procesa el JSON según el formato: parsed.data.name, etc.
+            
+            // Caso 1: Formato con .data (Goalforest/JW)
             if (parsed.type === "new" && parsed.data) {
                 notifyDiscord({
                     name: parsed.data.name || "Unknown Sakura",
                     generation: parsed.data.generation || "$0M/s",
                     jobid: parsed.data.jobid || "0"
+                });
+            } 
+            // Caso 2: Nuevo formato directo (Finders Port)
+            else if (parsed.name && parsed.money) {
+                notifyDiscord({
+                    name: parsed.name,
+                    generation: `$${parsed.money}M/s`,
+                    jobid: parsed.jobid || "0"
                 });
             }
         } catch (e) {}
