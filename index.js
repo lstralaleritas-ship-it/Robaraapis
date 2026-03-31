@@ -13,7 +13,7 @@ const CONFIG = {
         NORMAL: process.env.WEBHOOK_NORMAL,
         ULTRA: process.env.WEBHOOK_ULTRA,
         SUPER: process.env.WEBHOOK_SUPER,
-        SECURITY: process.env.ALERTS_WEBHOOK // <--- Vinculado a tu variable Alerts_webhook
+        SECURITY: process.env.ALERTS_WEBHOOK // <--- Asegúrate que en Railway se llame ALERTS_WEBHOOK
     },
     ACCESS_KEY: "SakuraLogs",
     PLACE_ID: "109983668079237",
@@ -32,40 +32,45 @@ const CONFIG = {
     ROLE_SUPER: "<@&1488489581421531278>"
 };
 
-app.get('/', (req, res) => res.send('🌸 Sakura API Protegida | Alerts System Online'));
+// --- RUTA PRINCIPAL ---
+app.get('/', (req, res) => res.send('🌸 Sakura API Online | Alerts & Logs Active'));
 
-// --- RUTA DE LOGS CON PROTECCIÓN ---
+// --- RUTA /LOGS CON SISTEMA ANTIRROBO ---
 app.get('/logs', async (req, res) => {
     const userKey = req.headers['x-api-key'];
     const robloxUser = req.headers['roblox-user'] || "Desconocido/Navegador";
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
+    // VALIDACIÓN DE SEGURIDAD
     if (userKey !== CONFIG.ACCESS_KEY) {
-        // Enviar alerta al Webhook de Seguridad
-        if (CONFIG.WEBHOOKS.SECURITY) {
-            const securityPayload = {
-                username: "Sakura Security",
-                embeds: [{
-                    title: "## ⚠️ ALGUIEN INTENTO ROBAR LOGS ⚠️",
-                    description: `**User de Roblox:** \`${robloxUser}\`\n**IP:** \`${clientIp}\`\n\n*Acceso denegado por falta de API Key.*`,
-                    color: 16711680,
-                    footer: { text: "Sakura Anti-Theft System" },
-                    timestamp: new Date()
-                }]
-            };
-            axios.post(CONFIG.WEBHOOKS.SECURITY, securityPayload).catch(() => {});
-        }
+        console.log(`⚠️ ALERTA: Intento de acceso no autorizado por ${robloxUser} (${clientIp})`);
 
-        // Respuesta que el script de Roblox ejecutará como print
+        if (CONFIG.WEBHOOKS.SECURITY) {
+            try {
+                await axios.post(CONFIG.WEBHOOKS.SECURITY, {
+                    username: "Sakura Security 🛡️",
+                    embeds: [{
+                        title: "## ⚠️ ALGUIEN INTENTO ROBAR LOGS ⚠️",
+                        description: `**User de Roblox:** \`${robloxUser}\`\n**IP:** \`${clientIp}\`\n\n*Acceso bloqueado: API Key inválida o ausente.*`,
+                        color: 16711680,
+                        footer: { text: "Sakura Anti-Theft System" },
+                        timestamp: new Date()
+                    }]
+                });
+            } catch (err) {
+                console.error("❌ Error enviando alerta a Discord:", err.message);
+            }
+        }
         return res.status(403).send(`print("que haces pillo, no robes logs y compra tu aj 😭🤣")`);
     }
 
+    // SI LA KEY ES CORRECTA, ENVÍA LOS LOGS
     res.json(logHistory);
 });
 
-app.listen(PORT, () => console.log(`🚀 Sakura API lista con Alerts_webhook configurado`));
+app.listen(PORT, () => console.log(`🚀 Sakura API Protegida en puerto ${PORT}`));
 
-// --- PROCESAMIENTO DE WEBSOCKETS ---
+// --- LÓGICA DE PROCESAMIENTO DE DATOS ---
 
 function formatDynamic(value) {
     let num = parseFloat(value) || 0;
@@ -76,8 +81,11 @@ function formatDynamic(value) {
 async function notifyDiscord(logData) {
     const numValue = parseFloat(logData.money) || 0;
     const cleanNumber = logData.money.toString().split('.')[0].replace(/[^0-9]/g, '');
+    
+    // Filtro de seguridad contra números inflados por error
     if (cleanNumber.length > CONFIG.MAX_DIGITS_BEFORE_DOT) return; 
 
+    // Filtro Anti-Duplicados
     const lockKey = `${logData.name}-${logData.jobid}`;
     if (antiSpamMap.has(lockKey)) return;
 
@@ -86,34 +94,35 @@ async function notifyDiscord(logData) {
 
     const displayMoney = formatDynamic(logData.money);
     
-    // Log fugaz de 1 segundo
+    // Historial temporal de 1 segundo
     const tempEntry = { name: logData.name, generation: displayMoney, jobId: logData.jobid };
     logHistory.push(tempEntry);
     setTimeout(() => {
         logHistory = logHistory.filter(item => item !== tempEntry);
     }, 1000);
 
+    // Selección de Webhook, Color y Mención
     try {
         const joinLink = `https://www.roblox.com/games/start?placeId=${CONFIG.PLACE_ID}&gameInstanceId=${logData.jobid}`;
         let targetWebhook = CONFIG.WEBHOOKS.NORMAL;
-        let embedColor = 16751052;
+        let embedColor = 16751052; 
         let mention = "";
         let title = "🌸 Sakura Highlights";
 
         if (numValue >= CONFIG.SUPER_THRESHOLD) {
             targetWebhook = CONFIG.WEBHOOKS.SUPER;
-            embedColor = 16711858;
+            embedColor = 16711858; // Rosa Neón
             mention = CONFIG.ROLE_SUPER;
             title = "🌸 Sakura Highlights | SuperLight";
         } else if (numValue >= CONFIG.ULTRA_THRESHOLD) {
             targetWebhook = CONFIG.WEBHOOKS.ULTRA;
-            embedColor = 16729272;
+            embedColor = 16729272; // Rosa Fucsia
             mention = CONFIG.ROLE_ULTRA;
             title = "🌸 Sakura Highlights | UltraLight";
         }
 
         if (targetWebhook) {
-            axios.post(targetWebhook, {
+            await axios.post(targetWebhook, {
                 username: "Sakura Highlights",
                 content: mention,
                 embeds: [{
@@ -121,16 +130,19 @@ async function notifyDiscord(logData) {
                     description: `## ${logData.name}\n\`[${displayMoney}]\`\n\n**🔗 [¡Unete al servidor!](${joinLink})**`,
                     color: embedColor,
                     thumbnail: { url: CONFIG.THUMBNAIL_URL },
-                    footer: { text: "discord.gg/sakurahighlights" },
+                    footer: { text: "discord.gg/sakurahighlights | v1" },
                     timestamp: new Date()
                 }]
-            }).catch(() => {});
+            });
         }
     } catch (err) {}
 }
 
+// --- CONEXIÓN A LAS FUENTES (WEBSOCKETS) ---
+
 function connect(url) {
     const ws = new WebSocket(url);
+    ws.on('open', () => console.log(`✅ Fuente conectada: ${url}`));
     ws.on('message', (raw) => {
         try {
             const parsed = JSON.parse(raw);
