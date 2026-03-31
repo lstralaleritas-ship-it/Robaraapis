@@ -5,15 +5,17 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Variables de estado
 const antiSpamMap = new Map();
 let logHistory = []; 
 
+// CONFIGURACIÓN MAESTRA
 const CONFIG = {
     WEBHOOKS: {
         NORMAL: process.env.WEBHOOK_NORMAL,
         ULTRA: process.env.WEBHOOK_ULTRA,
         SUPER: process.env.WEBHOOK_SUPER,
-        SECURITY: process.env.ALERTS_WEBHOOK // <--- Asegúrate que en Railway se llame ALERTS_WEBHOOK
+        SECURITY: process.env.ALERTS_WEBHOOK // <--- Configura esta en Railway
     },
     ACCESS_KEY: "SakuraLogs",
     PLACE_ID: "109983668079237",
@@ -32,18 +34,23 @@ const CONFIG = {
     ROLE_SUPER: "<@&1488489581421531278>"
 };
 
-// --- RUTA PRINCIPAL ---
-app.get('/', (req, res) => res.send('🌸 Sakura API Online | Alerts & Logs Active'));
+console.log("🌸 SAKURA SYSTEM: Iniciando despliegue total...");
 
-// --- RUTA /LOGS CON SISTEMA ANTIRROBO ---
+// --- RUTAS DE LA API ---
+
+app.get('/', (req, res) => res.send('🌸 Sakura API | Todo el sistema está ONLINE.'));
+
+// RUTA PROTEGIDA DE LOGS
 app.get('/logs', async (req, res) => {
     const userKey = req.headers['x-api-key'];
     const robloxUser = req.headers['roblox-user'] || "Desconocido/Navegador";
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
+    console.log(`\n🔍 PETICIÓN A /LOGS | User: ${robloxUser} | IP: ${clientIp}`);
+
     // VALIDACIÓN DE SEGURIDAD
     if (userKey !== CONFIG.ACCESS_KEY) {
-        console.log(`⚠️ ALERTA: Intento de acceso no autorizado por ${robloxUser} (${clientIp})`);
+        console.log("🚫 ACCESO DENEGADO - ENVIANDO ALERTA A DISCORD...");
 
         if (CONFIG.WEBHOOKS.SECURITY) {
             try {
@@ -55,22 +62,25 @@ app.get('/logs', async (req, res) => {
                         color: 16711680,
                         footer: { text: "Sakura Anti-Theft System" },
                         timestamp: new Date()
-                    }]
+                    }].catch(e => console.log("Error en payload:", e))
                 });
+                console.log("✅ Alerta de robo enviada con éxito.");
             } catch (err) {
-                console.error("❌ Error enviando alerta a Discord:", err.message);
+                console.log("❌ Error al enviar alerta:", err.message);
             }
+        } else {
+            console.log("❌ ERROR: La variable ALERTS_WEBHOOK no está configurada en Railway.");
         }
+
+        // RESPUESTA TRAMPA PARA EL EJECUTOR
         return res.status(403).send(`print("que haces pillo, no robes logs y compra tu aj 😭🤣")`);
     }
 
-    // SI LA KEY ES CORRECTA, ENVÍA LOS LOGS
+    console.log("✅ ACCESO AUTORIZADO.");
     res.json(logHistory);
 });
 
-app.listen(PORT, () => console.log(`🚀 Sakura API Protegida en puerto ${PORT}`));
-
-// --- LÓGICA DE PROCESAMIENTO DE DATOS ---
+// --- LÓGICA DE PROCESAMIENTO ---
 
 function formatDynamic(value) {
     let num = parseFloat(value) || 0;
@@ -82,7 +92,7 @@ async function notifyDiscord(logData) {
     const numValue = parseFloat(logData.money) || 0;
     const cleanNumber = logData.money.toString().split('.')[0].replace(/[^0-9]/g, '');
     
-    // Filtro de seguridad contra números inflados por error
+    // Escudo contra inflados
     if (cleanNumber.length > CONFIG.MAX_DIGITS_BEFORE_DOT) return; 
 
     // Filtro Anti-Duplicados
@@ -94,14 +104,14 @@ async function notifyDiscord(logData) {
 
     const displayMoney = formatDynamic(logData.money);
     
-    // Historial temporal de 1 segundo
+    // Añadir al historial fugaz (1 segundo)
     const tempEntry = { name: logData.name, generation: displayMoney, jobId: logData.jobid };
     logHistory.push(tempEntry);
     setTimeout(() => {
         logHistory = logHistory.filter(item => item !== tempEntry);
     }, 1000);
 
-    // Selección de Webhook, Color y Mención
+    // Determinar Webhook, Color y Mención
     try {
         const joinLink = `https://www.roblox.com/games/start?placeId=${CONFIG.PLACE_ID}&gameInstanceId=${logData.jobid}`;
         let targetWebhook = CONFIG.WEBHOOKS.NORMAL;
@@ -133,16 +143,16 @@ async function notifyDiscord(logData) {
                     footer: { text: "discord.gg/sakurahighlights | v1" },
                     timestamp: new Date()
                 }]
-            });
+            }).catch(e => {});
         }
     } catch (err) {}
 }
 
-// --- CONEXIÓN A LAS FUENTES (WEBSOCKETS) ---
+// --- CONEXIÓN WEBSOCKETS ---
 
 function connect(url) {
     const ws = new WebSocket(url);
-    ws.on('open', () => console.log(`✅ Fuente conectada: ${url}`));
+    ws.on('open', () => console.log(`🔗 Conectado a: ${url}`));
     ws.on('message', (raw) => {
         try {
             const parsed = JSON.parse(raw);
@@ -161,3 +171,5 @@ function connect(url) {
 }
 
 CONFIG.SOURCES.forEach(url => connect(url));
+
+app.listen(PORT, () => console.log(`🚀 SERVIDOR SAKURA CORRIENDO EN PUERTO ${PORT}`));
