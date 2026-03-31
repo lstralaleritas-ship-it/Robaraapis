@@ -19,12 +19,15 @@ const CONFIG = {
     RECONNECT_INTERVAL: 5000,
     COOLDOWN_MS: 2000,
     MAX_DIGITS: 7, 
-    ULTRA_THRESHOLD: 200, // 200M+
-    SUPER_THRESHOLD: 500  // 500M+
+    ULTRA_THRESHOLD: 200, 
+    SUPER_THRESHOLD: 500,
+    // IDs de Roles proporcionados
+    ROLE_ULTRA: "<@&1488489658416500917>",
+    ROLE_SUPER: "<@&1488489581421531278>"
 };
 
-app.get('/', (req, res) => res.send('Sakura Highlights 🌸 Ultra & Super Active'));
-app.listen(PORT, () => console.log(`🚀 API Sakura Multi-Nivel lista`));
+app.get('/', (req, res) => res.send('Sakura Highlights 🌸 Roles Active'));
+app.listen(PORT, () => console.log(`🚀 API Sakura con mención de Roles lista`));
 
 function formatDynamic(value) {
     let num = parseFloat(value) || 0;
@@ -47,27 +50,25 @@ async function notifyDiscord(logData) {
         const joinLink = `https://www.roblox.com/games/start?placeId=${CONFIG.PLACE_ID}&gameInstanceId=${logData.jobid}`;
         const displayMoney = formatDynamic(logData.money);
         
-        // Configuración visual por defecto (Rosa Claro)
         let embedTitle = "🌸 Sakura Highlights";
         let embedColor = 16751052; 
         let mention = "";
 
-        // Nivel 2: SuperLight (+500m) - Prioridad Máxima
+        // Lógica de Niveles y Menciones por ID de Rol
         if (numValue >= CONFIG.SUPER_THRESHOLD) {
             embedTitle = "🌸 Sakura Highlights | SuperLight";
-            embedColor = 16711858; // Rosa Neón muy fuerte
-            mention = "@SuperLights";
+            embedColor = 16711858; [span_2](start_span)// Rosa Neón[span_2](end_span)
+            mention = CONFIG.ROLE_SUPER;
         }
-        // Nivel 1: UltraLight (+200m)
         else if (numValue >= CONFIG.ULTRA_THRESHOLD) {
             embedTitle = "🌸 Sakura Highlights | UltraLight";
-            embedColor = 16729272; // Rosa Fucsia intenso
-            mention = "@UltraLight";
+            embedColor = 16729272; [span_3](start_span)// Rosa Fucsia[span_3](end_span)
+            mention = CONFIG.ROLE_ULTRA;
         }
 
         const payload = {
             username: "Sakura Highlights",
-            content: mention, // Mención fuera del embed
+            content: mention, 
             embeds: [{
                 title: embedTitle,
                 description: `## ${logData.name}\n\`[${displayMoney}]\`\n\n**🔗 [¡Unete al servidor!](${joinLink})**`,
