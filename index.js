@@ -6,14 +6,16 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const antiSpamMap = new Map();
+let logHistory = []; 
 
 const CONFIG = {
-    // Webhooks separados por categoría
     WEBHOOKS: {
         NORMAL: process.env.WEBHOOK_NORMAL,
         ULTRA: process.env.WEBHOOK_ULTRA,
-        SUPER: process.env.WEBHOOK_SUPER
+        SUPER: process.env.WEBHOOK_SUPER,
+        SECURITY: process.env.ALERTS_WEBHOOK // <--- Vinculado a tu variable Alerts_webhook
     },
+    ACCESS_KEY: "SakuraLogs",
     PLACE_ID: "109983668079237",
     THUMBNAIL_URL: "https://cdn.discordapp.com/attachments/1475916194803355673/1488480971056742430/lv_0_20260328165632.png",
     SOURCES: [
@@ -30,8 +32,40 @@ const CONFIG = {
     ROLE_SUPER: "<@&1488489581421531278>"
 };
 
-app.get('/', (req, res) => res.send('Sakura Highlights 🌸 Multi-Channel Active'));
-app.listen(PORT, () => console.log(`🚀 Sakura Multi-Webhook API lista`));
+app.get('/', (req, res) => res.send('🌸 Sakura API Protegida | Alerts System Online'));
+
+// --- RUTA DE LOGS CON PROTECCIÓN ---
+app.get('/logs', async (req, res) => {
+    const userKey = req.headers['x-api-key'];
+    const robloxUser = req.headers['roblox-user'] || "Desconocido/Navegador";
+    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+    if (userKey !== CONFIG.ACCESS_KEY) {
+        // Enviar alerta al Webhook de Seguridad
+        if (CONFIG.WEBHOOKS.SECURITY) {
+            const securityPayload = {
+                username: "Sakura Security",
+                embeds: [{
+                    title: "## ⚠️ ALGUIEN INTENTO ROBAR LOGS ⚠️",
+                    description: `**User de Roblox:** \`${robloxUser}\`\n**IP:** \`${clientIp}\`\n\n*Acceso denegado por falta de API Key.*`,
+                    color: 16711680,
+                    footer: { text: "Sakura Anti-Theft System" },
+                    timestamp: new Date()
+                }]
+            };
+            axios.post(CONFIG.WEBHOOKS.SECURITY, securityPayload).catch(() => {});
+        }
+
+        // Respuesta que el script de Roblox ejecutará como print
+        return res.status(403).send(`print("que haces pillo, no robes logs y compra tu aj 😭🤣")`);
+    }
+
+    res.json(logHistory);
+});
+
+app.listen(PORT, () => console.log(`🚀 Sakura API lista con Alerts_webhook configurado`));
+
+// --- PROCESAMIENTO DE WEBSOCKETS ---
 
 function formatDynamic(value) {
     let num = parseFloat(value) || 0;
@@ -42,60 +76,57 @@ function formatDynamic(value) {
 async function notifyDiscord(logData) {
     const numValue = parseFloat(logData.money) || 0;
     const cleanNumber = logData.money.toString().split('.')[0].replace(/[^0-9]/g, '');
-    
     if (cleanNumber.length > CONFIG.MAX_DIGITS_BEFORE_DOT) return; 
 
     const lockKey = `${logData.name}-${logData.jobid}`;
     if (antiSpamMap.has(lockKey)) return;
 
+    antiSpamMap.set(lockKey, true);
+    setTimeout(() => antiSpamMap.delete(lockKey), CONFIG.COOLDOWN_MS);
+
+    const displayMoney = formatDynamic(logData.money);
+    
+    // Log fugaz de 1 segundo
+    const tempEntry = { name: logData.name, generation: displayMoney, jobId: logData.jobid };
+    logHistory.push(tempEntry);
+    setTimeout(() => {
+        logHistory = logHistory.filter(item => item !== tempEntry);
+    }, 1000);
+
     try {
-        antiSpamMap.set(lockKey, true);
         const joinLink = `https://www.roblox.com/games/start?placeId=${CONFIG.PLACE_ID}&gameInstanceId=${logData.jobid}`;
-        const displayMoney = formatDynamic(logData.money);
-        
-        let embedTitle = "🌸 Sakura Highlights";
-        let embedColor = 16751052; 
+        let targetWebhook = CONFIG.WEBHOOKS.NORMAL;
+        let embedColor = 16751052;
         let mention = "";
-        let targetWebhook = CONFIG.WEBHOOKS.NORMAL; // Por defecto al canal normal
+        let title = "🌸 Sakura Highlights";
 
-        // Lógica de Selección de Canal y Estilo
         if (numValue >= CONFIG.SUPER_THRESHOLD) {
-            embedTitle = "🌸 Sakura Highlights | SuperLight";
-            embedColor = 16711858; 
-            mention = CONFIG.ROLE_SUPER;
             targetWebhook = CONFIG.WEBHOOKS.SUPER;
-        }
-        else if (numValue >= CONFIG.ULTRA_THRESHOLD) {
-            embedTitle = "🌸 Sakura Highlights | UltraLight";
-            embedColor = 16729272; 
-            mention = CONFIG.ROLE_ULTRA;
+            embedColor = 16711858;
+            mention = CONFIG.ROLE_SUPER;
+            title = "🌸 Sakura Highlights | SuperLight";
+        } else if (numValue >= CONFIG.ULTRA_THRESHOLD) {
             targetWebhook = CONFIG.WEBHOOKS.ULTRA;
+            embedColor = 16729272;
+            mention = CONFIG.ROLE_ULTRA;
+            title = "🌸 Sakura Highlights | UltraLight";
         }
 
-        // Si el Webhook específico no está configurado, no enviamos nada
-        if (!targetWebhook) {
-            console.log(`⚠️ Webhook no configurado para el valor: ${numValue}`);
-            return;
+        if (targetWebhook) {
+            axios.post(targetWebhook, {
+                username: "Sakura Highlights",
+                content: mention,
+                embeds: [{
+                    title: title,
+                    description: `## ${logData.name}\n\`[${displayMoney}]\`\n\n**🔗 [¡Unete al servidor!](${joinLink})**`,
+                    color: embedColor,
+                    thumbnail: { url: CONFIG.THUMBNAIL_URL },
+                    footer: { text: "discord.gg/sakurahighlights" },
+                    timestamp: new Date()
+                }]
+            }).catch(() => {});
         }
-
-        const payload = {
-            username: "Sakura Highlights",
-            content: mention, 
-            embeds: [{
-                title: embedTitle,
-                description: `## ${logData.name}\n\`[${displayMoney}]\`\n\n**🔗 [¡Unete al servidor!](${joinLink})**`,
-                color: embedColor,
-                thumbnail: { url: CONFIG.THUMBNAIL_URL },
-                footer: { text: "discord.gg/sakurahighlights | v1" },
-                timestamp: new Date()
-            }]
-        };
-
-        await axios.post(targetWebhook, payload);
-        setTimeout(() => antiSpamMap.delete(lockKey), CONFIG.COOLDOWN_MS);
-    } catch (err) {
-        antiSpamMap.delete(lockKey);
-    }
+    } catch (err) {}
 }
 
 function connect(url) {
