@@ -18,12 +18,13 @@ const CONFIG = {
     ],
     RECONNECT_INTERVAL: 5000,
     COOLDOWN_MS: 2000,
-    MAX_DIGITS: 7, // Filtro contra logs inflados
-    ULTRA_THRESHOLD: 200 // Umbral para UltraLight
+    MAX_DIGITS: 7, 
+    ULTRA_THRESHOLD: 200, // 200M+
+    SUPER_THRESHOLD: 500  // 500M+
 };
 
-app.get('/', (req, res) => res.send('Sakura Highlights 🌸 UltraLight Active'));
-app.listen(PORT, () => console.log(`🚀 API Sakura con modo UltraLight lista`));
+app.get('/', (req, res) => res.send('Sakura Highlights 🌸 Ultra & Super Active'));
+app.listen(PORT, () => console.log(`🚀 API Sakura Multi-Nivel lista`));
 
 function formatDynamic(value) {
     let num = parseFloat(value) || 0;
@@ -48,16 +49,25 @@ async function notifyDiscord(logData) {
         
         // Configuración visual por defecto (Rosa Claro)
         let embedTitle = "🌸 Sakura Highlights";
-        let embedColor = 16751052; // Rosa Sakura Original
+        let embedColor = 16751052; 
+        let mention = "";
 
-        // Modo UltraLight (+200m)
-        if (numValue >= CONFIG.ULTRA_THRESHOLD) {
+        // Nivel 2: SuperLight (+500m) - Prioridad Máxima
+        if (numValue >= CONFIG.SUPER_THRESHOLD) {
+            embedTitle = "🌸 Sakura Highlights | SuperLight";
+            embedColor = 16711858; // Rosa Neón muy fuerte
+            mention = "@SuperLights";
+        }
+        // Nivel 1: UltraLight (+200m)
+        else if (numValue >= CONFIG.ULTRA_THRESHOLD) {
             embedTitle = "🌸 Sakura Highlights | UltraLight";
             embedColor = 16729272; // Rosa Fucsia intenso
+            mention = "@UltraLight";
         }
 
         const payload = {
             username: "Sakura Highlights",
+            content: mention, // Mención fuera del embed
             embeds: [{
                 title: embedTitle,
                 description: `## ${logData.name}\n\`[${displayMoney}]\`\n\n**🔗 [¡Unete al servidor!](${joinLink})**`,
