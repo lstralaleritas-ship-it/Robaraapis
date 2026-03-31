@@ -10,7 +10,7 @@ const antiSpamMap = new Map();
 const CONFIG = {
     WEBHOOK_URL: process.env.DISCORD_WEBHOOK,
     PLACE_ID: "109983668079237",
-    THUMBNAIL_URL: "https://cdn.discordapp.com/attachments/1475916194803355673/1488480971056742430/lv_0_20260328165632.png?ex=69ccef6e&is=69cb9dee&hm=b3916b927b605ce766d149938fab8e3187956fb8d68707ba29ea9e4d7a07f148&",
+    THUMBNAIL_URL: "https://cdn.discordapp.com/attachments/1475916194803355673/1488480971056742430/lv_0_20260328165632.png",
     SOURCES: [
         "wss://worker2.goalforest.workers.dev/ws",
         "wss://jw-auto-joiner-production-bda0.up.railway.app/",
@@ -18,40 +18,35 @@ const CONFIG = {
     ],
     RECONNECT_INTERVAL: 5000,
     COOLDOWN_MS: 2000,
-    MAX_LIMIT_BILLIONS: 15 // Límite estricto de 15 Billones
+    MAX_DIGITS: 7, // Filtro de seguridad para logs inflados
+    ALERT_THRESHOLD: 200 // Umbral para el @everyone
 };
 
-app.get('/', (req, res) => res.send('Sakura Highlights 🌸 Dynamic M/B Active'));
-app.listen(PORT, () => console.log(`🚀 Sakura API (M/B) en puerto ${PORT}`));
+app.get('/', (req, res) => res.send('Sakura Highlights 🌸 Alert System Active'));
+app.listen(PORT, () => console.log(`🚀 API con Alerta @everyone lista`));
 
-// Función para formatear el dinero dinámicamente
-function formatCurrency(value) {
-    const num = parseFloat(value) || 0;
-    if (num >= 1000) {
-        return `$${(num / 1000).toFixed(2)}B/s`; // Convierte a Billones si es >= 1000M
-    }
-    return `$${num.toFixed(2)}M/s`; // Mantiene Millones
+function formatDynamic(value) {
+    let num = parseFloat(value) || 0;
+    if (num >= 1000) return `$${(num / 1000).toFixed(2)}B/s`;
+    return `$${num.toFixed(2)}M/s`;
 }
 
 async function notifyDiscord(logData) {
     if (!CONFIG.WEBHOOK_URL) return;
 
-    const rawValue = parseFloat(logData.money) || 0;
-    
-    // Filtro de Seguridad: Si supera los 15,000M (15B), se ignora
-    if (rawValue > (CONFIG.MAX_LIMIT_BILLIONS * 1000)) {
-        console.log(`⚠️ Bloqueado: ${logData.name} por valor excesivo (${rawValue}M)`);
-        return;
-    }
+    const rawString = logData.money.toString().split('.')[0]; 
+    if (rawString.length > CONFIG.MAX_DIGITS) return; // Bloquea basura
 
     const lockKey = `${logData.name}-${logData.jobid}`;
     if (antiSpamMap.has(lockKey)) return;
 
     try {
         antiSpamMap.set(lockKey, true);
+        const numValue = parseFloat(logData.money) || 0;
         const joinLink = `https://www.roblox.com/games/start?placeId=${CONFIG.PLACE_ID}&gameInstanceId=${logData.jobid}`;
-        const displayMoney = formatCurrency(rawValue);
+        const displayMoney = formatDynamic(logData.money);
         
+        // Configuración del Payload
         const payload = {
             username: "Sakura Highlights",
             embeds: [{
@@ -63,6 +58,11 @@ async function notifyDiscord(logData) {
                 timestamp: new Date()
             }]
         };
+
+        // Si el log es de +200m, añade el @everyone fuera del embed
+        if (numValue >= CONFIG.ALERT_THRESHOLD) {
+            payload.content = "@everyone +200m log";
+        }
 
         await axios.post(CONFIG.WEBHOOK_URL, payload);
         setTimeout(() => antiSpamMap.delete(lockKey), CONFIG.COOLDOWN_MS);
@@ -76,25 +76,14 @@ function connect(url) {
     ws.on('message', (raw) => {
         try {
             const parsed = JSON.parse(raw);
-            let extractedData = null;
-
+            let data = null;
             if (parsed.type === "new" && parsed.data) {
-                // Limpiamos el texto "$30M/s" para quedarnos solo con el número
                 const cleanMoney = parsed.data.generation.replace(/[^0-9.]/g, '');
-                extractedData = {
-                    name: parsed.data.name,
-                    money: cleanMoney,
-                    jobid: parsed.data.jobid
-                };
+                data = { name: parsed.data.name, money: cleanMoney, jobid: parsed.data.jobid };
             } else if (parsed.name && parsed.money) {
-                extractedData = {
-                    name: parsed.name,
-                    money: parsed.money,
-                    jobid: parsed.jobid
-                };
+                data = { name: parsed.name, money: parsed.money, jobid: parsed.jobid };
             }
-
-            if (extractedData) notifyDiscord(extractedData);
+            if (data) notifyDiscord(data);
         } catch (e) {}
     });
     ws.on('close', () => setTimeout(() => connect(url), CONFIG.RECONNECT_INTERVAL));
