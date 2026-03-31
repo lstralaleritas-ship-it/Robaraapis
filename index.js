@@ -29,7 +29,7 @@ async function notifyDiscord(logData) {
         const payload = {
             username: "Sakura Highlights",
             embeds: [{
-                title: "🌸 Sakura Highlights | New Found",
+                title: "🌸 Sakura Highlights",
                 // Se quitó "Best" y se añadió ## al nombre
                 description: `## ${logData.name}\n\`[${logData.generation}]\`\n\n**🔗 [¡Unete al servidor!](${joinLink})**`,
                 color: 16751052, // Rosa Sakura
