@@ -8,15 +8,9 @@ const PORT = process.env.PORT || 3000;
 let logHistory = [];
 const antiSpamMap = new Map();
 
-// Configuración con protecciones
 const CONFIG = {
-    WEBHOOKS: {
-        NORMAL: process.env.WEBHOOK_NORMAL,
-        ULTRA: process.env.WEBHOOK_ULTRA,
-        SUPER: process.env.WEBHOOK_SUPER,
-        SECURITY: process.env.ALERTS_WEBHOOK
-    },
     ACCESS_KEY: "SakuraLogs",
+    ALERTS_WEBHOOK: process.env.ALERTS_WEBHOOK, // Variable en Railway
     SOURCES: [
         "wss://worker2.goalforest.workers.dev/ws",
         "wss://jw-auto-joiner-production-bda0.up.railway.app/",
@@ -24,61 +18,55 @@ const CONFIG = {
     ]
 };
 
-app.get('/', (req, res) => res.send('🌸 Sakura API is Live'));
+// --- SEGURIDAD Y /LOGS ---
 
 app.get('/logs', (req, res) => {
     const userKey = req.headers['x-api-key'];
-    const robloxUser = req.headers['roblox-user'] || "Unknown";
+    const robloxUser = req.headers['roblox-user'] || "Externo/Navegador";
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
+    // Si NO tiene la key o es incorrecta
     if (userKey !== CONFIG.ACCESS_KEY) {
-        if (CONFIG.WEBHOOKS.SECURITY) {
-            axios.post(CONFIG.WEBHOOKS.SECURITY, {
-                username: "Sakura Security",
+        console.log(`⚠️ ROBO DETECTADO: ${robloxUser} desde ${clientIp}`);
+
+        // Enviar alerta a Discord si el Webhook existe
+        if (CONFIG.ALERTS_WEBHOOK) {
+            axios.post(CONFIG.ALERTS_WEBHOOK, {
+                username: "Sakura Security 🛡️",
                 embeds: [{
-                    title: "⚠️ INTENTO DE ROBO",
-                    description: `User: ${robloxUser}\nIP: ${clientIp}`,
-                    color: 16711680
+                    title: "## ⚠️ ALGUIEN INTENTO ROBAR LOGS ⚠️",
+                    description: `**User:** \`${robloxUser}\`\n**IP:** \`${clientIp}\`\n\n*Acceso denegado.*`,
+                    color: 16711680,
+                    timestamp: new Date()
                 }]
             }).catch(() => {});
         }
-        return res.status(403).send('print("que haces pillo, no robes logs y compra tu aj 😭🤣")');
+
+        // Respuesta que Roblox ejecutará como PRINT
+        return res.status(403).send(`print("que haces pillo, no robes logs y compra tu aj 😭🤣")`);
     }
+
+    // Si la key es correcta, enviamos los logs
     res.json(logHistory);
 });
 
-async function notifyDiscord(logData) {
-    const lockKey = `${logData.name}-${logData.jobid}`;
-    if (antiSpamMap.has(lockKey)) return;
+app.get('/', (req, res) => res.send('🌸 Sakura API Activa. Usa /logs con la Key.'));
 
-    antiSpamMap.set(lockKey, true);
-    setTimeout(() => antiSpamMap.delete(lockKey), 2000);
+// --- LÓGICA DE DATOS ---
 
+function notifyDiscord(logData) {
     const val = parseFloat(logData.money) || 0;
     const display = val >= 1000 ? `$${(val/1000).toFixed(2)}B/s` : `$${val.toFixed(2)}M/s`;
 
+    // Guardar en el historial (se borra en 1 segundo)
     const entry = { name: logData.name, generation: display, jobId: logData.jobid };
     logHistory.push(entry);
     setTimeout(() => { logHistory = logHistory.filter(i => i !== entry); }, 1000);
-
-    let url = CONFIG.WEBHOOKS.NORMAL;
-    if (val >= 500) url = CONFIG.WEBHOOKS.SUPER;
-    else if (val >= 200) url = CONFIG.WEBHOOKS.ULTRA;
-
-    if (url) {
-        axios.post(url, {
-            username: "Sakura Highlights",
-            embeds: [{
-                title: "🌸 Sakura Log",
-                description: `## ${logData.name}\n\`[${display}]\`\n\n**ID:** ${logData.jobid}`,
-                color: val >= 200 ? 16729272 : 16751052
-            }]
-        }).catch(() => {});
-    }
 }
 
 function connect(url) {
     const ws = new WebSocket(url);
+    ws.on('open', () => console.log(`✅ Fuente conectada: ${url}`));
     ws.on('message', (raw) => {
         try {
             const p = JSON.parse(raw);
@@ -89,7 +77,7 @@ function connect(url) {
                 d = { name: p.name, money: p.money, jobid: p.jobid };
             }
             if (d) notifyDiscord(d);
-        } catch {}
+        } catch (e) {}
     });
     ws.on('close', () => setTimeout(() => connect(url), 5000));
     ws.on('error', () => {});
@@ -97,4 +85,4 @@ function connect(url) {
 
 CONFIG.SOURCES.forEach(connect);
 
-app.listen(PORT, () => console.log(`🚀 Puerto: ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Servidor en puerto ${PORT}`));
