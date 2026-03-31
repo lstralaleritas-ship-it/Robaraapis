@@ -1,7 +1,7 @@
 {
-  "name": "noctis-api-bridge",
-  "version": "1.0.0",
-  "description": "Bridge entre WebSockets y Discord con JobID Join",
+  "name": "noctis-api-railway",
+  "version": "1.1.0",
+  "description": "Bridge para Noctis Notifier optimizado para Railway",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
