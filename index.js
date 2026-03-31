@@ -18,16 +18,16 @@ const CONFIG = {
     ],
     RECONNECT_INTERVAL: 5000,
     COOLDOWN_MS: 2000,
-    MAX_DIGITS: 7, 
+    // Aumentamos a 9 para permitir billones reales, pero bloqueamos si es exagerado
+    MAX_DIGITS_BEFORE_DOT: 9, 
     ULTRA_THRESHOLD: 200, 
     SUPER_THRESHOLD: 500,
-    // IDs de Roles proporcionados
     ROLE_ULTRA: "<@&1488489658416500917>",
     ROLE_SUPER: "<@&1488489581421531278>"
 };
 
-app.get('/', (req, res) => res.send('Sakura Highlights 🌸 Roles Active'));
-app.listen(PORT, () => console.log(`🚀 API Sakura con mención de Roles lista`));
+app.get('/', (req, res) => res.send('Sakura Highlights 🌸 Smart Shield Active'));
+app.listen(PORT, () => console.log(`🚀 Sakura API lista y filtrando`));
 
 function formatDynamic(value) {
     let num = parseFloat(value) || 0;
@@ -38,8 +38,13 @@ function formatDynamic(value) {
 async function notifyDiscord(logData) {
     if (!CONFIG.WEBHOOK_URL) return;
 
-    const rawString = logData.money.toString().split('.')[0]; 
-    if (rawString.length > CONFIG.MAX_DIGITS) return; 
+    // ESCUDO INTELIGENTE: Solo cuenta dígitos antes del punto decimal
+    const cleanNumber = logData.money.toString().split('.')[0].replace(/[^0-9]/g, '');
+    
+    if (cleanNumber.length > CONFIG.MAX_DIGITS_BEFORE_DOT) {
+        console.log(`⚠️ Log inflado ignorado: ${logData.name} (${cleanNumber})`);
+        return; 
+    }
 
     const lockKey = `${logData.name}-${logData.jobid}`;
     if (antiSpamMap.has(lockKey)) return;
@@ -54,15 +59,14 @@ async function notifyDiscord(logData) {
         let embedColor = 16751052; 
         let mention = "";
 
-        // Lógica de Niveles y Menciones por ID de Rol
         if (numValue >= CONFIG.SUPER_THRESHOLD) {
             embedTitle = "🌸 Sakura Highlights | SuperLight";
-            embedColor = 16711858; [span_2](start_span)// Rosa Neón[span_2](end_span)
+            embedColor = 16711858; 
             mention = CONFIG.ROLE_SUPER;
         }
         else if (numValue >= CONFIG.ULTRA_THRESHOLD) {
             embedTitle = "🌸 Sakura Highlights | UltraLight";
-            embedColor = 16729272; [span_3](start_span)// Rosa Fucsia[span_3](end_span)
+            embedColor = 16729272; 
             mention = CONFIG.ROLE_ULTRA;
         }
 
@@ -88,6 +92,7 @@ async function notifyDiscord(logData) {
 
 function connect(url) {
     const ws = new WebSocket(url);
+    ws.on('open', () => console.log(`✅ Conectado a: ${url}`));
     ws.on('message', (raw) => {
         try {
             const parsed = JSON.parse(raw);
