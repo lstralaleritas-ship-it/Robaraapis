@@ -18,12 +18,12 @@ const CONFIG = {
     ],
     RECONNECT_INTERVAL: 5000,
     COOLDOWN_MS: 2000,
-    MAX_DIGITS: 7, // Filtro de seguridad para logs inflados
-    ALERT_THRESHOLD: 200 // Umbral para el @everyone
+    MAX_DIGITS: 7, // Filtro contra logs inflados
+    ULTRA_THRESHOLD: 200 // Umbral para UltraLight
 };
 
-app.get('/', (req, res) => res.send('Sakura Highlights 🌸 Alert System Active'));
-app.listen(PORT, () => console.log(`🚀 API con Alerta @everyone lista`));
+app.get('/', (req, res) => res.send('Sakura Highlights 🌸 UltraLight Active'));
+app.listen(PORT, () => console.log(`🚀 API Sakura con modo UltraLight lista`));
 
 function formatDynamic(value) {
     let num = parseFloat(value) || 0;
@@ -35,7 +35,7 @@ async function notifyDiscord(logData) {
     if (!CONFIG.WEBHOOK_URL) return;
 
     const rawString = logData.money.toString().split('.')[0]; 
-    if (rawString.length > CONFIG.MAX_DIGITS) return; // Bloquea basura
+    if (rawString.length > CONFIG.MAX_DIGITS) return; 
 
     const lockKey = `${logData.name}-${logData.jobid}`;
     if (antiSpamMap.has(lockKey)) return;
@@ -46,23 +46,27 @@ async function notifyDiscord(logData) {
         const joinLink = `https://www.roblox.com/games/start?placeId=${CONFIG.PLACE_ID}&gameInstanceId=${logData.jobid}`;
         const displayMoney = formatDynamic(logData.money);
         
-        // Configuración del Payload
+        // Configuración visual por defecto (Rosa Claro)
+        let embedTitle = "🌸 Sakura Highlights";
+        let embedColor = 16751052; // Rosa Sakura Original
+
+        // Modo UltraLight (+200m)
+        if (numValue >= CONFIG.ULTRA_THRESHOLD) {
+            embedTitle = "🌸 Sakura Highlights | UltraLight";
+            embedColor = 16729272; // Rosa Fucsia intenso
+        }
+
         const payload = {
             username: "Sakura Highlights",
             embeds: [{
-                title: "🌸 Sakura Highlights",
+                title: embedTitle,
                 description: `## ${logData.name}\n\`[${displayMoney}]\`\n\n**🔗 [¡Unete al servidor!](${joinLink})**`,
-                color: 16751052,
+                color: embedColor,
                 thumbnail: { url: CONFIG.THUMBNAIL_URL },
                 footer: { text: "discord.gg/sakurahighlights | v1" },
                 timestamp: new Date()
             }]
         };
-
-        // Si el log es de +200m, añade el @everyone fuera del embed
-        if (numValue >= CONFIG.ALERT_THRESHOLD) {
-            payload.content = "@everyone +200m log";
-        }
 
         await axios.post(CONFIG.WEBHOOK_URL, payload);
         setTimeout(() => antiSpamMap.delete(lockKey), CONFIG.COOLDOWN_MS);
