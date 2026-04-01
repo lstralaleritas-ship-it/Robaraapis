@@ -28,7 +28,6 @@ const CONFIG = {
     // FUENTES LIMPIAS (Adiós jw-auto-joiner)
     SOURCES: [
         "wss://worker2.goalforest.workers.dev/ws",
-        "wss://finders-port-websocket-production.up.railway.app/ws"
     ]
 };
 
